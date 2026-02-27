@@ -63,23 +63,25 @@ def worker():
             # Detect normal 1267, 1169), bottom-right corner (1313, 1199).
             card_total = detect_number(1167, 1169, 1313, 1199) # Normal Left, bottom right corner
             if card_total is None:
-                    # If card total is not found, check to the right (1316, 1179) bottom right corner (____, ____)#
-                    # Click 5: 1324, 1166 Click 6: 1363, 1205
-                    card_total_right = detect_number(1324, 1166, 1363, 1205)
-                    if card_total_right != None:
-                        card_total = card_total_right
-                    else:
-                        time.sleep(1)
-            elif card_total is 2:
+                # If card total is not found, check to the right (1316, 1179) bottom right corner (____, ____)#
+                # Click 5: 1324, 1166 Click 6: 1363, 1205
+                card_total_right = detect_number(1324, 1166, 1363, 1205)
+                if card_total_right != None:
+                    card_total = card_total_right
+                else:
+                    pyautogui.moveTo(1592, 1448)
+                    pyautogui.click()
+                    pyautogui.moveTo(1578,1531)
+                    pyautogui.click()
+            elif card_total == 2:
                 # Click the "Bid 2" button at 1578, 1531
                 pyautogui.moveTo(1578,1531)
                 pyautogui.click()
-    
-            elif card_total > 17:
+            elif card_total >= 17:
                 # Click Hold 1394,1447
                 pyautogui.moveTo(1394,1447)
                 pyautogui.click()       
-                
+
             else:
                 # Click Hit 1592, 1448
                 pyautogui.moveTo(1592, 1448)
