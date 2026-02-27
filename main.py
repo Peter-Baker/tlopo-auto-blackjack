@@ -4,45 +4,55 @@ import time
 import threading
 import pyautogui
 from pynput import keyboard
-
-# I didnt account for things combining
-# I think its clicking before switching cords?
-
-# Left Hexagon 1390, 199
-# Left Hexagon BGR RED: (51, 50, 108)
-# Left Hexagon BGR BLUE: (248, 191, 22)
-# Left Hexagon BGR GREEN: (78, 129, 155)
-
-# Right Hexagon 1478, 262
-# Right Hexagon BGR RED: (83, 88, 168)
-# Right Hexagon BGR BLUE: (182, 88, 14)
-# Right Hexagon BGR GREEN: (29, 80, 72)
+import pytesseract
+from PIL import Image
+import os
 
 running = False
 stop_program = False
 
-def detect_number_ocr(x, y, width=15, height=15):
-    """Detect a number 1-21 in a small screen region using OCR"""
-    with mss.mss() as sct:
-        # Capture the region
-        monitor = {"top": y, "left": x, "width": width, "height": height}
-        screenshot = sct.grab(monitor)
-        
-        # Convert to PIL Image for pytesseract
-        image = Image.frombytes('RGB', screenshot.size, screenshot.rgb)
-        
-        # Upscale for better OCR accuracy
-        image = image.resize((image.width * 4, image.height * 4))
-        
-        # Extract text
-        text = pytesseract.image_to_string(image, config='--psm 6')
-        
+def detect_number(left, top, width, height):
+    # Capture the screen region where the blackjack total appears.
+    # Top-left corner (1267, 1169), bottom-right corner (1313, 1199).
+    # Returns an integer if a number is detected, otherwise None.
+    try:
+        with mss.mss() as sct:
+            monitor = {
+                "left": left,
+                "top": top,
+                "width": width - left,
+                "height": height - top,
+            }
+            img = np.array(sct.grab(monitor))
+    except Exception:
+        # if screen capture fails return None
+        return None
+
+    # convert to PIL image for processing
+    img_pil = Image.fromarray(img)
+
+    # preprocess: grayscale and upscale for better OCR
+    gray = img_pil.convert("L")
+    # ANTIALIAS was removed in recent Pillow versions, use LANCZOS or Resampling.LANCZOS
+    try:
+        resample_filter = Image.LANCZOS
+    except AttributeError:
+        # fallback for very new versions
+        resample_filter = Image.Resampling.LANCZOS
+    gray = gray.resize((gray.width * 2, gray.height * 2), resample_filter)
+
+    # perform OCR limiting to digits only
+    custom_config = "--psm 7 -c tessedit_char_whitelist=0123456789"
+    text = pytesseract.image_to_string(gray, config=custom_config)
+
+    # try to extract a whole number
+    import re
+    match = re.search(r"\d+", text)
+    if match:
         try:
-            number = int(text.strip())
-            if 1 <= number <= 21:
-                return number
+            return int(match.group())
         except ValueError:
-            pass
+            return None
     return None
 
 def worker():
@@ -50,9 +60,33 @@ def worker():
 
     while not stop_program:
         if running:
-            detect_number()
+            # Detect normal 1267, 1169), bottom-right corner (1313, 1199).
+            card_total = detect_number(1167, 1169, 1313, 1199) # Normal Left, bottom right corner
+            if card_total is None:
+                    # If card total is not found, check to the right (1316, 1179) bottom right corner (____, ____)#
+                    # Click 5: 1324, 1166 Click 6: 1363, 1205
+                    card_total_right = detect_number(1324, 1166, 1363, 1205)
+                    if card_total_right != None:
+                        card_total = card_total_right
+                    else:
+                        time.sleep(1)
+            elif card_total is 2:
+                # Click the "Bid 2" button at 1578, 1531
+                pyautogui.moveTo(1578,1531)
+                pyautogui.click()
+    
+            elif card_total > 17:
+                # Click Hold 1394,1447
+                pyautogui.moveTo(1394,1447)
+                pyautogui.click()       
+                
+            else:
+                # Click Hit 1592, 1448
+                pyautogui.moveTo(1592, 1448)
+                pyautogui.click()
+
+            print(f"{card_total} is the card total.")
             time.sleep(2)
-            pyautogui.moveTo(1430, 338)
         else:
             time.sleep(0.1)
 
@@ -72,13 +106,18 @@ def on_press(key):
     else:
         print("Stopped checking.")
 
-print("Press any key to start / stop checking.")
-print("Press ESC to exit.")
+def main():
+    print("Press any key to start / stop checking.")
+    print("Press ESC to exit.")
 
-t = threading.Thread(target=worker, daemon=True)
-t.start()
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
 
-with keyboard.Listener(on_press=on_press) as listener:
-    listener.join()
+    with keyboard.Listener(on_press=on_press) as listener:
+        listener.join()
+
+
+if __name__ == "__main__":
+    main()
 
 # PRESS ESC TO END PROGRAM
